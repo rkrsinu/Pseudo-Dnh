@@ -185,8 +185,9 @@ if st.button("Predict"):
     st.subheader("Predicted Barrier Height")
     st.success(f"{Ucal:.2f}")
 
-    st.subheader("Predicted B20")
-    st.success(f"{B20:.6f}")
+    #st.subheader("Predicted B20")
+    #st.success(f"{B20:.6f}")
 
     st.subheader("Predicted Log(τ₀)")
     st.success(f"{log_tau:.4f}")
+
