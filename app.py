@@ -113,7 +113,7 @@ def get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2):
         ang1 = angle(Ax1, Dy, coord)
         ang2 = angle(Ax2, Dy, coord)
 
-        if 60 <= ang1 <= 110 and 60 <= ang2 <= 110:
+        if 60 <= ang1 <= 150 and 60 <= ang2 <= 150:
             candidates.append((i + 1, atom, d, ang1, ang2))
 
     # Sort by distance (important)
