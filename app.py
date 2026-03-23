@@ -11,7 +11,7 @@ U_MODEL = "Ucal_GB_model.joblib"
 B20_MODEL = "B20_GB_model.joblib"
 TAU_MODEL = "tio_GB_model.joblib"
 
-st.set_page_config(page_title="Dy Pseudo-Dnh Magnetic Predictor", layout="wide")
+st.set_page_config(page_title="Dy Magnetic Predictor", layout="wide")
 
 
 # =========================
@@ -37,6 +37,7 @@ def read_xyz(file):
         p = line.split()
         if len(p) < 4:
             continue
+
         try:
             xyz = list(map(float, p[1:4]))
         except:
@@ -78,63 +79,59 @@ def angle(a, b, c):
 
 
 # =========================
-# EQUATORIAL SELECTION (FIXED)
+# EQUATORIAL SELECTION (YOUR RULES)
 # =========================
-def get_equatorial_atoms(coords, dy_idx, ax1, ax2, CN):
+def get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2):
 
     Dy = coords[dy_idx]
     Ax1 = coords[ax1]
     Ax2 = coords[ax2]
 
-    neighbors = []
+    candidates = []
 
-    # Step 1: distance filter (STRICT)
     for i, coord in enumerate(coords):
+
         if i in [dy_idx, ax1, ax2]:
             continue
 
+        atom = atoms[i]
         d = dist(Dy, coord)
 
-        if 1.9 <= d <= 3.0:  # 🔥 tightened
-            neighbors.append((i, d, coord))
+        # -------------------------
+        # DISTANCE RULE
+        # -------------------------
+        if atom.upper() == "H":
+            if not (1.8 <= d <= 2.0):
+                continue
+        else:
+            if not (1.9 <= d <= 3.5):
+                continue
 
-    # Step 2: sort by distance
-    neighbors = sorted(neighbors, key=lambda x: x[1])
-
-    # Step 3: angular filter
-    candidates = []
-    for i, d, coord in neighbors:
+        # -------------------------
+        # ANGLE RULE
+        # -------------------------
         ang1 = angle(Ax1, Dy, coord)
         ang2 = angle(Ax2, Dy, coord)
 
-        if 70 <= ang1 <= 110 and 70 <= ang2 <= 110:  # 🔥 tighter
-            candidates.append((i + 1, d))
+        if 60 <= ang1 <= 110 and 60 <= ang2 <= 110:
+            candidates.append((i + 1, atom, d, ang1, ang2))
 
-    # Step 4: take CN closest
-    candidates = candidates[:CN]
+    # Sort by distance (important)
+    candidates = sorted(candidates, key=lambda x: x[2])
 
-    # Step 5: remove outliers
-    eq_distances = np.array([d for _, d in candidates])
-
-    if len(eq_distances) > 0:
-        mean_d = np.mean(eq_distances)
-        mask = np.abs(eq_distances - mean_d) < 0.3
-        eq_distances = eq_distances[mask]
-        candidates = [c for c, m in zip(candidates, mask) if m]
-
-    return candidates, sorted(eq_distances)
+    return candidates
 
 
 # =========================
 # UI
 # =========================
-st.title("Dy Pseudo-Dnh Magnetic Property Predictor")
+st.title("Dy Magnetic Property Predictor")
 
 xyz_file = st.file_uploader("Upload XYZ file", type=["xyz"])
 
 col1, col2 = st.columns(2)
-ax1_input = col1.number_input("Axial atom index 1 (1-based)", min_value=1, step=1)
-ax2_input = col2.number_input("Axial atom index 2 (1-based)", min_value=1, step=1)
+ax1_input = col1.number_input("Axial atom index 1 (1-based)", min_value=1)
+ax2_input = col2.number_input("Axial atom index 2 (1-based)", min_value=1)
 
 symmetry = st.selectbox("Select symmetry", ["D4h", "D5h", "D6h"])
 
@@ -152,7 +149,7 @@ if st.button("Predict"):
     dy_idx = find_dy(atoms)
 
     if dy_idx is None:
-        st.error("Dy atom not found")
+        st.error("Dy not found")
         st.stop()
 
     ax1 = int(ax1_input) - 1
@@ -169,41 +166,35 @@ if st.button("Predict"):
     A2 = dist(Dy, Ax2)
     BA = abs(180 - angle(Ax1, Dy, Ax2))
 
-    CN = {"D4h": 4, "D5h": 5, "D6h": 6}[symmetry]
-
     # =========================
     # EQUATORIAL
     # =========================
-    candidates, eq_distances = get_equatorial_atoms(
-        coords, dy_idx, ax1, ax2, CN
-    )
+    candidates = get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2)
 
-    if len(eq_distances) < CN:
-        st.error(f"Only {len(eq_distances)} equatorial atoms found (need {CN})")
+    st.subheader("All Equatorial Candidates")
+    st.dataframe(pd.DataFrame(candidates,
+                              columns=["Index", "Atom", "Distance", "Angle1", "Angle2"]))
+
+    CN = {"D4h": 4, "D5h": 5, "D6h": 6}[symmetry]
+
+    if len(candidates) < CN:
+        st.error(f"Only {len(candidates)} equatorial atoms found (need {CN})")
         st.stop()
 
-    eq_distances = eq_distances[:CN]
+    selected = candidates[:CN]
+    eq_distances = sorted([x[2] for x in selected])
 
     # =========================
-    # DISPLAY RAW
+    # DISPLAY
     # =========================
-    raw_data = [CN, A1, A2, BA] + list(eq_distances)
-    raw_cols = ["CN", "A1", "A2", "BA"] + [f"BE{i+1}" for i in range(len(eq_distances))]
+    raw_data = [CN, A1, A2, BA] + eq_distances
+    cols = ["CN", "A1", "A2", "BA"] + [f"BE{i+1}" for i in range(CN)]
 
     st.subheader("Structural Parameters")
-    st.dataframe(pd.DataFrame([raw_data], columns=raw_cols))
+    st.dataframe(pd.DataFrame([raw_data], columns=cols))
 
-    st.subheader("Equatorial Atom Indices")
-    st.write([i for i, _ in candidates])
-
-    # =========================
-    # WARNINGS (IMPORTANT)
-    # =========================
-    if BA > 10:
-        st.warning("⚠️ Large axial bending (BA > 10°): poor axiality expected")
-
-    if max(eq_distances) - min(eq_distances) > 0.4:
-        st.warning("⚠️ Large spread in equatorial distances")
+    st.subheader("Selected Equatorial Atoms")
+    st.write(selected)
 
     # =========================
     # MODEL INPUT
@@ -233,13 +224,10 @@ if st.button("Predict"):
     ]).reshape(1, -1)
 
     # =========================
-    # LOAD MODELS
+    # PREDICTION
     # =========================
     u_model, b20_model, tau_model = load_models()
 
-    # =========================
-    # PREDICTIONS
-    # =========================
     Ucal = u_model.predict(base_features)[0]
     B20 = b20_model.predict(base_features)[0]
 
@@ -254,7 +242,7 @@ if st.button("Predict"):
     # =========================
     # OUTPUT
     # =========================
-    st.subheader("Predicted Barrier (Ucal)")
+    st.subheader("Predicted Ucal")
     st.success(f"{Ucal:.2f}")
 
     st.subheader("Predicted log(τ₀)")
