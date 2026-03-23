@@ -79,7 +79,7 @@ def angle(a, b, c):
 
 
 # =========================
-# EQUATORIAL SELECTION (YOUR RULES)
+# EQUATORIAL SELECTION
 # =========================
 def get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2):
 
@@ -97,9 +97,7 @@ def get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2):
         atom = atoms[i]
         d = dist(Dy, coord)
 
-        # -------------------------
-        # DISTANCE RULE
-        # -------------------------
+        # Distance rule
         if atom.upper() == "H":
             if not (1.8 <= d <= 2.0):
                 continue
@@ -107,16 +105,14 @@ def get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2):
             if not (1.9 <= d <= 3.5):
                 continue
 
-        # -------------------------
-        # ANGLE RULE
-        # -------------------------
+        # Angle rule (relaxed for distorted systems)
         ang1 = angle(Ax1, Dy, coord)
         ang2 = angle(Ax2, Dy, coord)
 
         if 60 <= ang1 <= 150 and 60 <= ang2 <= 150:
-            candidates.append((i + 1, atom, d, ang1, ang2))
+            candidates.append((i + 1, atom, d))
 
-    # Sort by distance (important)
+    # Sort by distance
     candidates = sorted(candidates, key=lambda x: x[2])
 
     return candidates
@@ -171,10 +167,6 @@ if st.button("Predict"):
     # =========================
     candidates = get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2)
 
-    st.subheader("All Equatorial Candidates")
-    st.dataframe(pd.DataFrame(candidates,
-                              columns=["Index", "Atom", "Distance", "Angle1", "Angle2"]))
-
     CN = {"D4h": 4, "D5h": 5, "D6h": 6}[symmetry]
 
     if len(candidates) < CN:
@@ -185,16 +177,13 @@ if st.button("Predict"):
     eq_distances = sorted([x[2] for x in selected])
 
     # =========================
-    # DISPLAY
+    # DISPLAY (CLEAN)
     # =========================
     raw_data = [CN, A1, A2, BA] + eq_distances
     cols = ["CN", "A1", "A2", "BA"] + [f"BE{i+1}" for i in range(CN)]
 
     st.subheader("Structural Parameters")
     st.dataframe(pd.DataFrame([raw_data], columns=cols))
-
-    st.subheader("Selected Equatorial Atoms")
-    st.write(selected)
 
     # =========================
     # MODEL INPUT
