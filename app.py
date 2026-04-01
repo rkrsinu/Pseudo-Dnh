@@ -11,6 +11,10 @@ U_MODEL = "Ucal_GB_model.joblib"
 B20_MODEL = "B20_GB_model.joblib"
 TAU_MODEL = "tio_GB_model.joblib"
 
+# NEW: symmetry-specific model
+def load_symmetry_model(sym):
+    return joblib.load(f"{sym}.joblib")
+
 st.set_page_config(page_title="Dy Magnetic Predictor", layout="wide")
 
 
@@ -97,7 +101,6 @@ def get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2):
         atom = atoms[i]
         d = dist(Dy, coord)
 
-        # Distance rule
         if atom.upper() == "H":
             if not (1.8 <= d <= 2.0):
                 continue
@@ -105,14 +108,12 @@ def get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2):
             if not (1.9 <= d <= 3.5):
                 continue
 
-        # Angle rule (relaxed for distorted systems)
         ang1 = angle(Ax1, Dy, coord)
         ang2 = angle(Ax2, Dy, coord)
 
         if 60 <= ang1 <= 150 and 60 <= ang2 <= 150:
             candidates.append((i + 1, atom, d))
 
-    # Sort by distance
     candidates = sorted(candidates, key=lambda x: x[2])
 
     return candidates
@@ -177,7 +178,7 @@ if st.button("Predict"):
     eq_distances = sorted([x[2] for x in selected])
 
     # =========================
-    # DISPLAY (CLEAN)
+    # DISPLAY
     # =========================
     raw_data = [CN, A1, A2, BA] + eq_distances
     cols = ["CN", "A1", "A2", "BA"] + [f"BE{i+1}" for i in range(CN)]
@@ -186,7 +187,27 @@ if st.button("Predict"):
     st.dataframe(pd.DataFrame([raw_data], columns=cols))
 
     # =========================
-    # MODEL INPUT
+    # DESCRIPTOR HANDLING (NEW)
+    # =========================
+    if symmetry == "D4h":
+        descriptors = ['A1', 'A2', 'BA', 'E1', 'E2', 'E3', 'E4']
+    elif symmetry == "D5h":
+        descriptors = ['A1', 'A2', 'BA', 'E1', 'E2', 'E3', 'E4', 'E5']
+    elif symmetry == "D6h":
+        descriptors = ['A1', 'A2', 'BA', 'E1', 'E2', 'E3', 'E4', 'E5', 'E6']
+
+    sym_features = [A1, A2, BA] + eq_distances[:len(descriptors)-3]
+    sym_features = np.array(sym_features).reshape(1, -1)
+
+    # load symmetry model (optional use)
+    sym_model = load_symmetry_model(symmetry)
+    sym_prediction = sym_model.predict(sym_features)[0]
+
+    st.subheader(f"{symmetry} Model Prediction")
+    st.info(f"{sym_prediction:.4f}")
+
+    # =========================
+    # ORIGINAL MODEL INPUT (UNCHANGED)
     # =========================
     if symmetry == "D4h":
         eq_model = eq_distances
@@ -213,7 +234,7 @@ if st.button("Predict"):
     ]).reshape(1, -1)
 
     # =========================
-    # PREDICTION
+    # ORIGINAL PREDICTION (UNCHANGED)
     # =========================
     u_model, b20_model, tau_model = load_models()
 
