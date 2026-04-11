@@ -10,7 +10,6 @@ from math import acos, degrees
 UEFF_MODEL = "Ueff_GB_model.joblib"
 TAU_MODEL = "tio_GB_model.joblib"
 
-# symmetry-specific models
 MODEL_PATHS = {
     "D4h": {
         "Ucal": "D4h_U_GB_model.joblib",
@@ -172,7 +171,7 @@ if st.button("Predict"):
     ucal_model, b20_model, gz_model, ueff_model, tau_model = load_models(symmetry)
 
     # =========================
-    # FEATURE BUILDING
+    # FEATURE BUILDING FOR SYMMETRY MODELS
     # =========================
     base_features = np.array([A1, A2, BA] + eq_distances).reshape(1, -1)
 
@@ -181,11 +180,35 @@ if st.button("Predict"):
     gz = gz_model.predict(base_features)[0]
 
     # =========================
+    # FIXED E FEATURES (CRITICAL)
+    # =========================
+    if symmetry == "D4h":
+        E = eq_distances[:4]
+
+    elif symmetry == "D5h":
+        # E1, E2, E3, average(E4, E5)
+        E = [
+            eq_distances[0],
+            eq_distances[1],
+            eq_distances[2],
+            np.mean(eq_distances[3:5])
+        ]
+
+    elif symmetry == "D6h":
+        # E1, E2, E3, average(E4, E5, E6)
+        E = [
+            eq_distances[0],
+            eq_distances[1],
+            eq_distances[2],
+            np.mean(eq_distances[3:6])
+        ]
+
+    # =========================
     # UEFF & TAU FEATURES
     # =========================
     ueff_features = np.array([
         CN, A1, A2, BA,
-        *eq_distances,
+        E[0], E[1], E[2], E[3],
         gz, Ucal, B20
     ]).reshape(1, -1)
 
