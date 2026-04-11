@@ -157,6 +157,11 @@ if st.button("Predict"):
 
     A1 = dist(Dy, Ax1)
     A2 = dist(Dy, Ax2)
+
+    # Sort axial distances (A1 < A2)
+    if A1 > A2:
+        A1, A2 = A2, A1
+
     BA = abs(180 - angle(Ax1, Dy, Ax2))
 
     candidates = get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2)
