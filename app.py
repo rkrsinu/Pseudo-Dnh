@@ -166,6 +166,27 @@ if st.button("Predict"):
     eq_distances = sorted([x[2] for x in selected])
 
     # =========================
+    # DISPLAY STRUCTURAL PARAMETERS
+    # =========================
+    st.subheader("Structural Parameters")
+
+    # Axial
+    st.markdown("**Axial**")
+    axial_df = pd.DataFrame({
+        "Parameter": ["A1 (Dy–Ax1)", "A2 (Dy–Ax2)", "Angle deviation (|180-θ|)"] ,
+        "Value": [A1, A2, BA]
+    })
+    st.dataframe(axial_df, use_container_width=True)
+
+    # Equatorial
+    st.markdown("**Equatorial Distances (sorted)**")
+    eq_df = pd.DataFrame({
+        "E_index": [f"E{i+1}" for i in range(len(eq_distances))],
+        "Distance": eq_distances
+    })
+    st.dataframe(eq_df, use_container_width=True)
+
+    # =========================
     # LOAD MODELS
     # =========================
     ucal_model, b20_model, gz_model, ueff_model, tau_model = load_models(symmetry)
