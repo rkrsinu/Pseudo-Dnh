@@ -24,7 +24,7 @@ MODEL_PATHS = {
 
 # Global models (NO gz)
 UEFF_MODEL = "Ueff_GB_model.joblib"
-TAU_MODEL = "tio_no_gz_model.joblib"
+TAU_MODEL = "tio_GB_model.joblib"
 
 st.set_page_config(page_title="Dy Magnetic Predictor", layout="wide")
 
