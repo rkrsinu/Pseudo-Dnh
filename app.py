@@ -7,20 +7,12 @@ from math import acos, degrees
 # MODEL PATHS
 # =========================
 MODEL_PATHS = {
-    "D4h": {
-        "Ucal": "D4h_U_GB_model.joblib",
-        "B20": "D4h_B20_GB_model.joblib",
-    },
-    "D5h": {
-        "Ucal": "D5h_U_GB_model.joblib",
-        "B20": "D5h_B20_GB_model.joblib",
-    },
-    "D6h": {
-        "Ucal": "D6h_U_GB_model.joblib",
-        "B20": "D6h_B20_GB_model.joblib",
-    }
+    "D4h": {"Ucal": "D4h_U_GB_model.joblib", "B20": "D4h_B20_GB_model.joblib"},
+    "D5h": {"Ucal": "D5h_U_GB_model.joblib", "B20": "D5h_B20_GB_model.joblib"},
+    "D6h": {"Ucal": "D6h_U_GB_model.joblib", "B20": "D6h_B20_GB_model.joblib"},
 }
 
+# SAME NAMES (as you requested)
 UEFF_MODEL = "Ueff_GB_model.joblib"
 TAU_MODEL  = "tio_GB_model.joblib"
 
@@ -44,15 +36,17 @@ def load_models(sym):
 def read_xyz(file):
     lines = file.read().decode().splitlines()
     atoms, coords = [], []
+
     for line in lines:
         p = line.split()
         if len(p) < 4:
             continue
         try:
-            coords.append(list(map(float, p[1:4])))
             atoms.append(p[0])
+            coords.append(list(map(float, p[1:4])))
         except:
             continue
+
     return atoms, np.array(coords)
 
 def find_dy(atoms):
@@ -68,8 +62,13 @@ def angle(a, b, c):
     ba = a - b
     bc = c - b
     return degrees(
-        acos(np.clip(np.dot(ba, bc) /
-        (np.linalg.norm(ba)*np.linalg.norm(bc)), -1, 1))
+        acos(
+            np.clip(
+                np.dot(ba, bc) /
+                (np.linalg.norm(ba) * np.linalg.norm(bc)),
+                -1, 1
+            )
+        )
     )
 
 def get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2):
@@ -104,23 +103,31 @@ def get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2):
 # =========================
 # UI
 # =========================
-st.title("Dy Magnetic Predictor (No gz)")
+st.title("Dy Magnetic Property Predictor (No gz)")
 
-xyz_file = st.file_uploader("Upload XYZ", type=["xyz"])
+xyz_file = st.file_uploader("Upload XYZ file", type=["xyz"])
 
-c1, c2 = st.columns(2)
-ax1_input = c1.number_input("Axial atom 1", min_value=1)
-ax2_input = c2.number_input("Axial atom 2", min_value=1)
+col1, col2 = st.columns(2)
+ax1_input = col1.number_input("Axial atom index 1", min_value=1)
+ax2_input = col2.number_input("Axial atom index 2", min_value=1)
 
-symmetry = st.selectbox("Symmetry", ["D4h", "D5h", "D6h"])
+symmetry = st.selectbox("Select symmetry", ["D4h", "D5h", "D6h"])
 
 # =========================
 # RUN
 # =========================
 if st.button("Predict"):
 
+    if xyz_file is None:
+        st.error("Please upload XYZ file")
+        st.stop()
+
     atoms, coords = read_xyz(xyz_file)
     dy_idx = find_dy(atoms)
+
+    if dy_idx is None:
+        st.error("Dy atom not found")
+        st.stop()
 
     ax1 = int(ax1_input) - 1
     ax2 = int(ax2_input) - 1
@@ -129,54 +136,99 @@ if st.button("Predict"):
     Ax1 = coords[ax1]
     Ax2 = coords[ax2]
 
-    # Axial
+    # =========================
+    # AXIAL
+    # =========================
     A1 = dist(Dy, Ax1)
     A2 = dist(Dy, Ax2)
+
     if A1 > A2:
         A1, A2 = A2, A1
 
     BA = abs(180 - angle(Ax1, Dy, Ax2))
 
-    # Equatorial
-    CN = {"D4h":4, "D5h":5, "D6h":6}[symmetry]
+    # =========================
+    # EQUATORIAL
+    # =========================
+    CN = {"D4h": 4, "D5h": 5, "D6h": 6}[symmetry]
+
     candidates = get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2)
+
+    if len(candidates) < CN:
+        st.error(f"Only {len(candidates)} equatorial atoms found (need {CN})")
+        st.stop()
 
     selected = candidates[:CN]
     eq_distances = sorted([x[2] for x in selected])
 
-    # E handling
+    # =========================
+    # DISPLAY STRUCTURE
+    # =========================
+    st.subheader("Structural Parameters")
+
+    st.write("A1:", A1)
+    st.write("A2:", A2)
+    st.write("BA:", BA)
+
+    for i, val in enumerate(eq_distances):
+        st.write(f"E{i+1}:", val)
+
+    # =========================
+    # E HANDLING
+    # =========================
     if symmetry == "D4h":
         E = eq_distances[:4]
-    elif symmetry == "D5h":
-        E = [eq_distances[0], eq_distances[1], eq_distances[2],
-             np.mean(eq_distances[3:5])]
-    else:
-        E = [eq_distances[0], eq_distances[1], eq_distances[2],
-             np.mean(eq_distances[3:6])]
 
-    # Load models
+    elif symmetry == "D5h":
+        E = [
+            eq_distances[0],
+            eq_distances[1],
+            eq_distances[2],
+            np.mean(eq_distances[3:5])
+        ]
+
+    elif symmetry == "D6h":
+        E = [
+            eq_distances[0],
+            eq_distances[1],
+            eq_distances[2],
+            np.mean(eq_distances[3:6])
+        ]
+
+    # =========================
+    # LOAD MODELS
+    # =========================
     u_model, b20_model, ueff_model, tau_model = load_models(symmetry)
 
-    # Base features (for symmetry models)
-    base_features = np.array([A1, A2, BA, *eq_distances]).reshape(1,-1)
+    # =========================
+    # BASE FEATURES (symmetry models)
+    # =========================
+    base_features = np.array([A1, A2, BA, *eq_distances]).reshape(1, -1)
 
     Ucal = u_model.predict(base_features)[0]
     B20  = b20_model.predict(base_features)[0]
 
-    # Final features (NO gz)
-    X = np.array([
+    # =========================
+    # FINAL FEATURES (NO gz)
+    # =========================
+    final_features = np.array([
         CN, A1, A2, BA,
         E[0], E[1], E[2], E[3],
         B20, Ucal
-    ]).reshape(1,-1)
+    ]).reshape(1, -1)
 
-    # Predictions
-    Ueff = ueff_model.predict(X)[0]
-    tau  = tau_model.predict(X)[0]
+    # =========================
+    # FINAL PREDICTIONS
+    # =========================
+    Ueff = ueff_model.predict(final_features)[0]
+    log_tau = tau_model.predict(final_features)[0]
 
-    # Output
-    st.subheader("Results")
+    # =========================
+    # OUTPUT
+    # =========================
+    st.subheader("Predictions")
+
     st.success(f"Ucal: {Ucal:.2f}")
     st.success(f"B20: {B20:.4f}")
     st.success(f"Ueff: {Ueff:.2f}")
-    st.success(f"log(tau0): {tau:.4f}")
+    st.success(f"log(tau0): {log_tau:.4f}")
