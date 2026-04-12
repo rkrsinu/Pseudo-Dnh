@@ -9,7 +9,7 @@ from math import acos, degrees
 # =========================
 U_MODEL = "Ucal_GB_model.joblib"
 B20_MODEL = "B20_GB_model.joblib"
-TAU_MODEL = "tio_GB_model.joblib"
+TAU_MODEL = "tio_GB_model.joblib"   # NEW (no gz model)
 
 st.set_page_config(page_title="Dy Magnetic Predictor", layout="wide")
 
@@ -112,7 +112,7 @@ def get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2):
 # =========================
 # UI
 # =========================
-st.title("Dy Magnetic Property Predictor")
+st.title("Dy Magnetic Property Predictor (No gz)")
 
 xyz_file = st.file_uploader("Upload XYZ file", type=["xyz"])
 
@@ -121,9 +121,6 @@ ax1_input = col1.number_input("Axial atom index 1 (1-based)", min_value=1)
 ax2_input = col2.number_input("Axial atom index 2 (1-based)", min_value=1)
 
 symmetry = st.selectbox("Select symmetry", ["D4h", "D5h", "D6h"])
-
-# 👉 USER INPUT gz
-gz_input = st.number_input("Enter gz value (from experiment or external calculation)", value=20.0)
 
 # =========================
 # RUN
@@ -157,6 +154,10 @@ if st.button("Predict"):
     candidates = get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2)
     CN = {"D4h": 4, "D5h": 5, "D6h": 6}[symmetry]
 
+    if len(candidates) < CN:
+        st.error(f"Only {len(candidates)} equatorial atoms found (need {CN})")
+        st.stop()
+
     selected = candidates[:CN]
     eq_distances = sorted([x[2] for x in selected])
 
@@ -176,15 +177,15 @@ if st.button("Predict"):
         E[0], E[1], E[2], E[3]
     ]).reshape(1, -1)
 
+    # Predict intermediate
     Ucal = u_model.predict(base_features)[0]
     B20 = b20_model.predict(base_features)[0]
-    gz = gz_input   # 👈 USER PROVIDED
 
-    # Final features
+    # Final features (NO gz)
     tau_features = np.array([
         CN, A1, A2, BA,
         E[0], E[1], E[2], E[3],
-        gz, B20, Ucal
+        B20, Ucal
     ]).reshape(1, -1)
 
     log_tau = tau_model.predict(tau_features)[0]
