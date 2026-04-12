@@ -235,7 +235,7 @@ if st.button("Predict"):
     ueff_features = np.array([
         CN, A1, A2, BA,
         E[0], E[1], E[2], E[3],
-        gz, Ucal, B20
+        gz, B20, Ucal
     ]).reshape(1, -1)
 
     Ueff = ueff_model.predict(ueff_features)[0]
