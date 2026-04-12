@@ -9,7 +9,6 @@ from math import acos, degrees
 # =========================
 U_MODEL = "Ucal_GB_model.joblib"
 B20_MODEL = "B20_GB_model.joblib"
-GZ_MODEL = "gZ_GB_model.joblib"
 TAU_MODEL = "tio_GB_model.joblib"
 
 st.set_page_config(page_title="Dy Magnetic Predictor", layout="wide")
@@ -22,7 +21,6 @@ def load_models():
     return (
         joblib.load(U_MODEL),
         joblib.load(B20_MODEL),
-        joblib.load(GZ_MODEL),
         joblib.load(TAU_MODEL),
     )
 
@@ -124,6 +122,9 @@ ax2_input = col2.number_input("Axial atom index 2 (1-based)", min_value=1)
 
 symmetry = st.selectbox("Select symmetry", ["D4h", "D5h", "D6h"])
 
+# 👉 USER INPUT gz
+gz_input = st.number_input("Enter gz value (from experiment or external calculation)", value=20.0)
+
 # =========================
 # RUN
 # =========================
@@ -136,10 +137,6 @@ if st.button("Predict"):
     atoms, coords = read_xyz(xyz_file)
     dy_idx = find_dy(atoms)
 
-    if dy_idx is None:
-        st.error("Dy not found")
-        st.stop()
-
     ax1 = int(ax1_input) - 1
     ax2 = int(ax2_input) - 1
 
@@ -147,9 +144,7 @@ if st.button("Predict"):
     Ax1 = coords[ax1]
     Ax2 = coords[ax2]
 
-    # =========================
-    # AXIAL
-    # =========================
+    # Axial
     A1 = dist(Dy, Ax1)
     A2 = dist(Dy, Ax2)
 
@@ -158,93 +153,44 @@ if st.button("Predict"):
 
     BA = abs(180 - angle(Ax1, Dy, Ax2))
 
-    # =========================
-    # EQUATORIAL
-    # =========================
+    # Equatorial
     candidates = get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2)
-
     CN = {"D4h": 4, "D5h": 5, "D6h": 6}[symmetry]
-
-    if len(candidates) < CN:
-        st.error(f"Only {len(candidates)} equatorial atoms found (need {CN})")
-        st.stop()
 
     selected = candidates[:CN]
     eq_distances = sorted([x[2] for x in selected])
 
-    # =========================
-    # DISPLAY STRUCTURE
-    # =========================
-    st.subheader("Structural Parameters")
-
-    st.write("A1:", A1)
-    st.write("A2:", A2)
-    st.write("BA:", BA)
-
-    st.write("Equatorial distances:", eq_distances)
-
-    # =========================
-    # E HANDLING
-    # =========================
+    # E handling
     if symmetry == "D4h":
         E = eq_distances[:4]
-
     elif symmetry == "D5h":
-        E = [
-            eq_distances[0],
-            eq_distances[1],
-            eq_distances[2],
-            np.mean(eq_distances[3:5])
-        ]
-
+        E = [eq_distances[0], eq_distances[1], eq_distances[2], np.mean(eq_distances[3:5])]
     elif symmetry == "D6h":
-        E = [
-            eq_distances[0],
-            eq_distances[1],
-            eq_distances[2],
-            np.mean(eq_distances[3:6])
-        ]
+        E = [eq_distances[0], eq_distances[1], eq_distances[2], np.mean(eq_distances[3:6])]
 
-    # =========================
-    # LOAD MODELS
-    # =========================
-    u_model, b20_model, gz_model, tau_model = load_models()
+    # Load models
+    u_model, b20_model, tau_model = load_models()
 
-    # =========================
-    # BASE FEATURES
-    # =========================
     base_features = np.array([
         CN, A1, A2, BA,
         E[0], E[1], E[2], E[3]
     ]).reshape(1, -1)
 
-    # =========================
-    # PREDICT INTERMEDIATE
-    # =========================
     Ucal = u_model.predict(base_features)[0]
     B20 = b20_model.predict(base_features)[0]
-    gz = gz_model.predict(base_features)[0]
+    gz = gz_input   # 👈 USER PROVIDED
 
-    # =========================
-    # FINAL FEATURES (IMPORTANT)
-    # =========================
+    # Final features
     tau_features = np.array([
         CN, A1, A2, BA,
         E[0], E[1], E[2], E[3],
-        gz, B20, Ucal   # correct order
+        gz, B20, Ucal
     ]).reshape(1, -1)
 
-    # =========================
-    # FINAL PREDICTION
-    # =========================
     log_tau = tau_model.predict(tau_features)[0]
 
-    # =========================
-    # OUTPUT
-    # =========================
+    # Output
     st.subheader("Predictions")
-
     st.success(f"Ucal: {Ucal:.2f}")
     st.success(f"B20: {B20:.4f}")
-    st.success(f"gz: {gz:.4f}")
     st.success(f"log(tau0): {log_tau:.4f}")
