@@ -4,22 +4,15 @@ import pandas as pd
 import joblib
 from math import acos, degrees
 
-# =========================
-# MODEL PATHS
-# =========================
 U_MODEL = "Ucal_GB_model.joblib"
 B20_MODEL = "B20_GB_model.joblib"
 TAU_MODEL = "tio_GB_model.joblib"
 
-# NEW: symmetry-specific model
-def load_symmetry_model(sym):
-    return joblib.load(f"{sym}.joblib")
-
-st.set_page_config(page_title="Dy Magnetic Predictor", layout="wide")
+st.set_page_config(page_title="Dy Pseudo-Dnh Magnetic Predictor", layout="wide")
 
 
 # =========================
-# LOAD MODELS
+# CACHED MODEL LOADING
 # =========================
 @st.cache_resource
 def load_models():
@@ -34,6 +27,7 @@ def load_models():
 # FILE READER
 # =========================
 def read_xyz(file):
+
     lines = file.read().decode().splitlines()
     atoms, coords = [], []
 
@@ -60,9 +54,6 @@ def find_dy(atoms):
     return None
 
 
-# =========================
-# GEOMETRY FUNCTIONS
-# =========================
 def dist(a, b):
     return np.linalg.norm(a - b)
 
@@ -83,52 +74,15 @@ def angle(a, b, c):
 
 
 # =========================
-# EQUATORIAL SELECTION
-# =========================
-def get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2):
-
-    Dy = coords[dy_idx]
-    Ax1 = coords[ax1]
-    Ax2 = coords[ax2]
-
-    candidates = []
-
-    for i, coord in enumerate(coords):
-
-        if i in [dy_idx, ax1, ax2]:
-            continue
-
-        atom = atoms[i]
-        d = dist(Dy, coord)
-
-        if atom.upper() == "H":
-            if not (1.8 <= d <= 2.0):
-                continue
-        else:
-            if not (1.9 <= d <= 3.5):
-                continue
-
-        ang1 = angle(Ax1, Dy, coord)
-        ang2 = angle(Ax2, Dy, coord)
-
-        if 60 <= ang1 <= 150 and 60 <= ang2 <= 150:
-            candidates.append((i + 1, atom, d))
-
-    candidates = sorted(candidates, key=lambda x: x[2])
-
-    return candidates
-
-
-# =========================
 # UI
 # =========================
-st.title("Dy Magnetic Property Predictor")
+st.title("Dy Pseudo-Dnh Magnetic Property Predictor")
 
 xyz_file = st.file_uploader("Upload XYZ file", type=["xyz"])
 
 col1, col2 = st.columns(2)
-ax1_input = col1.number_input("Axial atom index 1 (1-based)", min_value=1)
-ax2_input = col2.number_input("Axial atom index 2 (1-based)", min_value=1)
+ax1_input = col1.number_input("Axial atom index 1 (1-based)", min_value=1, step=1)
+ax2_input = col2.number_input("Axial atom index 2 (1-based)", min_value=1, step=1)
 
 symmetry = st.selectbox("Select symmetry", ["D4h", "D5h", "D6h"])
 
@@ -139,14 +93,14 @@ symmetry = st.selectbox("Select symmetry", ["D4h", "D5h", "D6h"])
 if st.button("Predict"):
 
     if xyz_file is None:
-        st.error("Upload XYZ file")
+        st.error("Please upload an XYZ file")
         st.stop()
 
     atoms, coords = read_xyz(xyz_file)
     dy_idx = find_dy(atoms)
 
     if dy_idx is None:
-        st.error("Dy not found")
+        st.error("Dy atom not found in structure")
         st.stop()
 
     ax1 = int(ax1_input) - 1
@@ -156,104 +110,84 @@ if st.button("Predict"):
     Ax1 = coords[ax1]
     Ax2 = coords[ax2]
 
-    # =========================
-    # AXIAL PARAMETERS
-    # =========================
     A1 = dist(Dy, Ax1)
     A2 = dist(Dy, Ax2)
     BA = abs(180 - angle(Ax1, Dy, Ax2))
 
-    # =========================
-    # EQUATORIAL
-    # =========================
-    candidates = get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2)
+    candidates = []
+
+    for i, coord in enumerate(coords):
+
+        if i in [dy_idx, ax1, ax2]:
+            continue
+
+        d = dist(Dy, coord)
+
+        if not (1.9 <= d <= 3.6):
+            continue
+
+        ang1 = angle(Ax1, Dy, coord)
+        ang2 = angle(Ax2, Dy, coord)
+
+        if 60 <= ang1 <= 125 and 60 <= ang2 <= 125:
+            candidates.append((i + 1, d))
 
     CN = {"D4h": 4, "D5h": 5, "D6h": 6}[symmetry]
 
     if len(candidates) < CN:
-        st.error(f"Only {len(candidates)} equatorial atoms found (need {CN})")
+        st.error(f"Only {len(candidates)} equatorial atoms found, but {CN} required.")
         st.stop()
 
-    selected = candidates[:CN]
-    eq_distances = sorted([x[2] for x in selected])
+    candidates = sorted(candidates, key=lambda x: x[1])[:CN]
+    eq_distances = sorted([d for _, d in candidates])
+    axial_sorted = sorted([A1, A2])
 
-    # =========================
-    # DISPLAY
-    # =========================
-    raw_data = [CN, A1, A2, BA] + eq_distances
-    cols = ["CN", "A1", "A2", "BA"] + [f"BE{i+1}" for i in range(CN)]
+    # -------- DISPLAY RAW --------
+    raw_data = [CN, axial_sorted[0], axial_sorted[1], BA] + eq_distances
+    raw_columns = ["CN", "A1", "A2", "BA"] + [f"BE{i+1}" for i in range(len(eq_distances))]
+    st.subheader("All Structural Parameters (Raw)")
+    st.dataframe(pd.DataFrame([raw_data], columns=raw_columns))
 
-    st.subheader("Structural Parameters")
-    st.dataframe(pd.DataFrame([raw_data], columns=cols))
+    st.subheader("Selected Equatorial Atom Indices (1-based)")
+    st.write([i for i, _ in candidates])
 
-    # =========================
-    # DESCRIPTOR HANDLING (NEW)
-    # =========================
-    if symmetry == "D4h":
-        descriptors = ['A1', 'A2', 'BA', 'E1', 'E2', 'E3', 'E4']
-    elif symmetry == "D5h":
-        descriptors = ['A1', 'A2', 'BA', 'E1', 'E2', 'E3', 'E4', 'E5']
-    elif symmetry == "D6h":
-        descriptors = ['A1', 'A2', 'BA', 'E1', 'E2', 'E3', 'E4', 'E5', 'E6']
-
-    sym_features = [A1, A2, BA] + eq_distances[:len(descriptors)-3]
-    sym_features = np.array(sym_features).reshape(1, -1)
-
-    # load symmetry model (optional use)
-    sym_model = load_symmetry_model(symmetry)
-    sym_prediction = sym_model.predict(sym_features)[0]
-
-    st.subheader(f"{symmetry} Model Prediction")
-    st.info(f"{sym_prediction:.4f}")
-
-    # =========================
-    # ORIGINAL MODEL INPUT (UNCHANGED)
-    # =========================
+    # -------- AVERAGING --------
     if symmetry == "D4h":
         eq_model = eq_distances
-
     elif symmetry == "D5h":
-        eq_model = [
-            eq_distances[0],
-            eq_distances[1],
-            np.mean(eq_distances[2:4]),
-            eq_distances[4],
-        ]
-
+        eq_model = [eq_distances[0], eq_distances[1],
+                    np.mean(eq_distances[2:4]), eq_distances[4]]
     elif symmetry == "D6h":
-        eq_model = [
-            eq_distances[0],
-            eq_distances[1],
-            np.mean(eq_distances[2:5]),
-            eq_distances[5],
-        ]
+        eq_model = [eq_distances[0], eq_distances[1],
+                    np.mean(eq_distances[2:5]), eq_distances[5]]
 
     base_features = np.array([
-        CN, A1, A2, BA,
+        CN, axial_sorted[0], axial_sorted[1], BA,
         eq_model[0], eq_model[1], eq_model[2], eq_model[3]
     ]).reshape(1, -1)
 
-    # =========================
-    # ORIGINAL PREDICTION (UNCHANGED)
-    # =========================
+    # -------- LOAD MODELS --------
     u_model, b20_model, tau_model = load_models()
 
+    # -------- PREDICTIONS --------
     Ucal = u_model.predict(base_features)[0]
     B20 = b20_model.predict(base_features)[0]
 
     tau_features = np.array([
-        CN, A1, A2, BA,
+        CN, axial_sorted[0], axial_sorted[1], BA,
         eq_model[0], eq_model[1], eq_model[2], eq_model[3],
         Ucal, B20
     ]).reshape(1, -1)
 
     log_tau = tau_model.predict(tau_features)[0]
 
-    # =========================
-    # OUTPUT
-    # =========================
-    st.subheader("Predicted Ucal")
+    # -------- OUTPUT --------
+    st.subheader("Predicted Barrier Height")
     st.success(f"{Ucal:.2f}")
 
-    st.subheader("Predicted log(τ₀)")
+    st.subheader("Predicted B20")
+    st.success(f"{B20:.6f}")
+
+    st.subheader("Predicted Log(τ₀)")
     st.success(f"{log_tau:.4f}")
+
