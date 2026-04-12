@@ -9,14 +9,10 @@ from math import acos, degrees
 # =========================
 U_MODEL = "Ucal_GB_model.joblib"
 B20_MODEL = "B20_GB_model.joblib"
+GZ_MODEL = "gZ_GB_model.joblib"
 TAU_MODEL = "tio_GB_model.joblib"
 
-# NEW: symmetry-specific model
-def load_symmetry_model(sym):
-    return joblib.load(f"{sym}.joblib")
-
 st.set_page_config(page_title="Dy Magnetic Predictor", layout="wide")
-
 
 # =========================
 # LOAD MODELS
@@ -26,9 +22,9 @@ def load_models():
     return (
         joblib.load(U_MODEL),
         joblib.load(B20_MODEL),
+        joblib.load(GZ_MODEL),
         joblib.load(TAU_MODEL),
     )
-
 
 # =========================
 # FILE READER
@@ -59,7 +55,6 @@ def find_dy(atoms):
             return i
     return None
 
-
 # =========================
 # GEOMETRY FUNCTIONS
 # =========================
@@ -80,7 +75,6 @@ def angle(a, b, c):
             )
         )
     )
-
 
 # =========================
 # EQUATORIAL SELECTION
@@ -115,9 +109,7 @@ def get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2):
             candidates.append((i + 1, atom, d))
 
     candidates = sorted(candidates, key=lambda x: x[2])
-
     return candidates
-
 
 # =========================
 # UI
@@ -131,7 +123,6 @@ ax1_input = col1.number_input("Axial atom index 1 (1-based)", min_value=1)
 ax2_input = col2.number_input("Axial atom index 2 (1-based)", min_value=1)
 
 symmetry = st.selectbox("Select symmetry", ["D4h", "D5h", "D6h"])
-
 
 # =========================
 # RUN
@@ -157,10 +148,14 @@ if st.button("Predict"):
     Ax2 = coords[ax2]
 
     # =========================
-    # AXIAL PARAMETERS
+    # AXIAL
     # =========================
     A1 = dist(Dy, Ax1)
     A2 = dist(Dy, Ax2)
+
+    if A1 > A2:
+        A1, A2 = A2, A1
+
     BA = abs(180 - angle(Ax1, Dy, Ax2))
 
     # =========================
@@ -178,82 +173,78 @@ if st.button("Predict"):
     eq_distances = sorted([x[2] for x in selected])
 
     # =========================
-    # DISPLAY
+    # DISPLAY STRUCTURE
     # =========================
-    raw_data = [CN, A1, A2, BA] + eq_distances
-    cols = ["CN", "A1", "A2", "BA"] + [f"BE{i+1}" for i in range(CN)]
-
     st.subheader("Structural Parameters")
-    st.dataframe(pd.DataFrame([raw_data], columns=cols))
+
+    st.write("A1:", A1)
+    st.write("A2:", A2)
+    st.write("BA:", BA)
+
+    st.write("Equatorial distances:", eq_distances)
 
     # =========================
-    # DESCRIPTOR HANDLING (NEW)
-    # =========================
-    if symmetry == "D4h":
-        descriptors = ['A1', 'A2', 'BA', 'E1', 'E2', 'E3', 'E4']
-    elif symmetry == "D5h":
-        descriptors = ['A1', 'A2', 'BA', 'E1', 'E2', 'E3', 'E4', 'E5']
-    elif symmetry == "D6h":
-        descriptors = ['A1', 'A2', 'BA', 'E1', 'E2', 'E3', 'E4', 'E5', 'E6']
-
-    sym_features = [A1, A2, BA] + eq_distances[:len(descriptors)-3]
-    sym_features = np.array(sym_features).reshape(1, -1)
-
-    # load symmetry model (optional use)
-    sym_model = load_symmetry_model(symmetry)
-    sym_prediction = sym_model.predict(sym_features)[0]
-
-    st.subheader(f"{symmetry} Model Prediction")
-    st.info(f"{sym_prediction:.4f}")
-
-    # =========================
-    # ORIGINAL MODEL INPUT (UNCHANGED)
+    # E HANDLING
     # =========================
     if symmetry == "D4h":
-        eq_model = eq_distances
+        E = eq_distances[:4]
 
     elif symmetry == "D5h":
-        eq_model = [
+        E = [
             eq_distances[0],
             eq_distances[1],
-            np.mean(eq_distances[2:4]),
-            eq_distances[4],
+            eq_distances[2],
+            np.mean(eq_distances[3:5])
         ]
 
     elif symmetry == "D6h":
-        eq_model = [
+        E = [
             eq_distances[0],
             eq_distances[1],
-            np.mean(eq_distances[2:5]),
-            eq_distances[5],
+            eq_distances[2],
+            np.mean(eq_distances[3:6])
         ]
 
+    # =========================
+    # LOAD MODELS
+    # =========================
+    u_model, b20_model, gz_model, tau_model = load_models()
+
+    # =========================
+    # BASE FEATURES
+    # =========================
     base_features = np.array([
         CN, A1, A2, BA,
-        eq_model[0], eq_model[1], eq_model[2], eq_model[3]
+        E[0], E[1], E[2], E[3]
     ]).reshape(1, -1)
 
     # =========================
-    # ORIGINAL PREDICTION (UNCHANGED)
+    # PREDICT INTERMEDIATE
     # =========================
-    u_model, b20_model, tau_model = load_models()
-
     Ucal = u_model.predict(base_features)[0]
     B20 = b20_model.predict(base_features)[0]
+    gz = gz_model.predict(base_features)[0]
 
+    # =========================
+    # FINAL FEATURES (IMPORTANT)
+    # =========================
     tau_features = np.array([
         CN, A1, A2, BA,
-        eq_model[0], eq_model[1], eq_model[2], eq_model[3],
-        Ucal, B20
+        E[0], E[1], E[2], E[3],
+        gz, B20, Ucal   # correct order
     ]).reshape(1, -1)
 
+    # =========================
+    # FINAL PREDICTION
+    # =========================
     log_tau = tau_model.predict(tau_features)[0]
 
     # =========================
     # OUTPUT
     # =========================
-    st.subheader("Predicted Ucal")
-    st.success(f"{Ucal:.2f}")
+    st.subheader("Predictions")
 
-    st.subheader("Predicted log(τ₀)")
-    st.success(f"{log_tau:.4f}")
+    st.success(f"Ucal: {Ucal:.2f}")
+    st.success(f"B20: {B20:.4f}")
+    st.success(f"gz: {gz:.4f}")
+    st.success(f"log(tau0): {log_tau:.4f}")
