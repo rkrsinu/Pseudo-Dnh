@@ -1,11 +1,10 @@
 import streamlit as st
 import numpy as np
-import pandas as pd
 import joblib
 from math import acos, degrees
 
 # =========================
-# MODEL PATHS (SYMMETRY BASED)
+# MODEL PATHS
 # =========================
 MODEL_PATHS = {
     "D4h": {
@@ -22,44 +21,38 @@ MODEL_PATHS = {
     }
 }
 
-# Global models (NO gz)
 UEFF_MODEL = "Ueff_GB_model.joblib"
-TAU_MODEL = "tio_GB_model.joblib"
+TAU_MODEL  = "tio_GB_model.joblib"
 
-st.set_page_config(page_title="Dy Magnetic Predictor", layout="wide")
+st.set_page_config(page_title="Dy Predictor (No gz)", layout="wide")
 
 # =========================
 # LOAD MODELS
 # =========================
 @st.cache_resource
 def load_models(sym):
-    paths = MODEL_PATHS[sym]
     return (
-        joblib.load(paths["Ucal"]),
-        joblib.load(paths["B20"]),
+        joblib.load(MODEL_PATHS[sym]["Ucal"]),
+        joblib.load(MODEL_PATHS[sym]["B20"]),
         joblib.load(UEFF_MODEL),
         joblib.load(TAU_MODEL),
     )
 
 # =========================
-# FILE READER
+# FUNCTIONS
 # =========================
 def read_xyz(file):
     lines = file.read().decode().splitlines()
     atoms, coords = [], []
-
     for line in lines:
         p = line.split()
         if len(p) < 4:
             continue
         try:
-            xyz = list(map(float, p[1:4]))
+            coords.append(list(map(float, p[1:4])))
+            atoms.append(p[0])
         except:
             continue
-
-        atoms.append(p[0])
-        coords.append(xyz)
-
     return atoms, np.array(coords)
 
 def find_dy(atoms):
@@ -68,9 +61,6 @@ def find_dy(atoms):
             return i
     return None
 
-# =========================
-# GEOMETRY
-# =========================
 def dist(a, b):
     return np.linalg.norm(a - b)
 
@@ -78,20 +68,11 @@ def angle(a, b, c):
     ba = a - b
     bc = c - b
     return degrees(
-        acos(
-            np.clip(
-                np.dot(ba, bc) /
-                (np.linalg.norm(ba) * np.linalg.norm(bc)),
-                -1, 1
-            )
-        )
+        acos(np.clip(np.dot(ba, bc) /
+        (np.linalg.norm(ba)*np.linalg.norm(bc)), -1, 1))
     )
 
-# =========================
-# EQUATORIAL SELECTION
-# =========================
 def get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2):
-
     Dy = coords[dy_idx]
     Ax1 = coords[ax1]
     Ax2 = coords[ax2]
@@ -116,22 +97,22 @@ def get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2):
         ang2 = angle(Ax2, Dy, coord)
 
         if 60 <= ang1 <= 150 and 60 <= ang2 <= 150:
-            candidates.append((i + 1, atom, d))
+            candidates.append((i, atom, d))
 
     return sorted(candidates, key=lambda x: x[2])
 
 # =========================
 # UI
 # =========================
-st.title("Dy Magnetic Property Predictor (No gz)")
+st.title("Dy Magnetic Predictor (No gz)")
 
-xyz_file = st.file_uploader("Upload XYZ file", type=["xyz"])
+xyz_file = st.file_uploader("Upload XYZ", type=["xyz"])
 
-col1, col2 = st.columns(2)
-ax1_input = col1.number_input("Axial atom index 1", min_value=1)
-ax2_input = col2.number_input("Axial atom index 2", min_value=1)
+c1, c2 = st.columns(2)
+ax1_input = c1.number_input("Axial atom 1", min_value=1)
+ax2_input = c2.number_input("Axial atom 2", min_value=1)
 
-symmetry = st.selectbox("Select symmetry", ["D4h", "D5h", "D6h"])
+symmetry = st.selectbox("Symmetry", ["D4h", "D5h", "D6h"])
 
 # =========================
 # RUN
@@ -151,16 +132,15 @@ if st.button("Predict"):
     # Axial
     A1 = dist(Dy, Ax1)
     A2 = dist(Dy, Ax2)
-
     if A1 > A2:
         A1, A2 = A2, A1
 
     BA = abs(180 - angle(Ax1, Dy, Ax2))
 
     # Equatorial
+    CN = {"D4h":4, "D5h":5, "D6h":6}[symmetry]
     candidates = get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2)
 
-    CN = {"D4h": 4, "D5h": 5, "D6h": 6}[symmetry]
     selected = candidates[:CN]
     eq_distances = sorted([x[2] for x in selected])
 
@@ -170,38 +150,33 @@ if st.button("Predict"):
     elif symmetry == "D5h":
         E = [eq_distances[0], eq_distances[1], eq_distances[2],
              np.mean(eq_distances[3:5])]
-    elif symmetry == "D6h":
+    else:
         E = [eq_distances[0], eq_distances[1], eq_distances[2],
              np.mean(eq_distances[3:6])]
 
     # Load models
     u_model, b20_model, ueff_model, tau_model = load_models(symmetry)
 
-    # Base features
-    base_features = np.array([
-        A1, A2, BA,
-        *eq_distances
-    ]).reshape(1, -1)
+    # Base features (for symmetry models)
+    base_features = np.array([A1, A2, BA, *eq_distances]).reshape(1,-1)
 
-    # Predict intermediate
     Ucal = u_model.predict(base_features)[0]
-    B20 = b20_model.predict(base_features)[0]
+    B20  = b20_model.predict(base_features)[0]
 
     # Final features (NO gz)
-    final_features = np.array([
+    X = np.array([
         CN, A1, A2, BA,
         E[0], E[1], E[2], E[3],
         B20, Ucal
-    ]).reshape(1, -1)
+    ]).reshape(1,-1)
 
-    # Final predictions
-    Ueff = ueff_model.predict(final_features)[0]
-    log_tau = tau_model.predict(final_features)[0]
+    # Predictions
+    Ueff = ueff_model.predict(X)[0]
+    tau  = tau_model.predict(X)[0]
 
     # Output
-    st.subheader("Predictions")
-
+    st.subheader("Results")
     st.success(f"Ucal: {Ucal:.2f}")
     st.success(f"B20: {B20:.4f}")
     st.success(f"Ueff: {Ueff:.2f}")
-    st.success(f"log(tau0): {log_tau:.4f}")
+    st.success(f"log(tau0): {tau:.4f}")
