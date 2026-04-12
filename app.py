@@ -9,7 +9,7 @@ from math import acos, degrees
 # =========================
 U_MODEL = "Ucal_GB_model.joblib"
 B20_MODEL = "B20_GB_model.joblib"
-TAU_MODEL = "tio_no_gz_model.joblib"   # 🔴 NEW MODEL (10 features)
+TAU_MODEL = "tio_GB_model.joblib"   # 🔴 NEW MODEL (10 features)
 
 st.set_page_config(page_title="Dy Magnetic Predictor", layout="wide")
 
