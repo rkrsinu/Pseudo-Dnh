@@ -103,7 +103,7 @@ def get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2):
 # =========================
 # UI
 # =========================
-st.title("Dy Magnetic Property Predictor (No gz)")
+st.title("Dy Magnetic Property Predictor")
 
 xyz_file = st.file_uploader("Upload XYZ file", type=["xyz"])
 
