@@ -16,7 +16,7 @@ MODEL_PATHS = {
 UEFF_MODEL = "Ueff_GB_model.joblib"
 TAU_MODEL  = "tio_GB_model.joblib"
 
-st.set_page_config(page_title="Dy Predictor (No gz)", layout="wide")
+st.set_page_config(page_title="Dy Predictor", layout="wide")
 
 # =========================
 # LOAD MODELS
