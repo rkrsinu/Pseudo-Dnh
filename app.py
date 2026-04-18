@@ -154,7 +154,9 @@ if st.button("Predict"):
         A1, A2 = A2, A1
 
     theta = angle(Ax1, Dy, Ax2)
-    BA = 180 - theta  # final value only
+
+    BA_model = 180 - theta   # used ONLY for model
+    BA_display = theta       # shown to user
 
     # =========================
     # EQUATORIAL
@@ -181,7 +183,7 @@ if st.button("Predict"):
         st.markdown("### Axial")
         st.write(f"A1: {A1:.3f} Å")
         st.write(f"A2: {A2:.3f} Å")
-        st.write(f"BA: {BA:.2f}°")
+        st.write(f"BA: {BA_display:.2f}°")  # only theta shown
 
     with col2:
         st.markdown("### Equatorial")
@@ -193,13 +195,13 @@ if st.button("Predict"):
     # =========================
     u_model, b20_model, ueff_model, tau_model = load_models(symmetry)
 
-    base_features = np.array([A1, A2, BA, *eq_distances]).reshape(1, -1)
+    base_features = np.array([A1, A2, BA_model, *eq_distances]).reshape(1, -1)
 
     Ucal = u_model.predict(base_features)[0]
     B20  = b20_model.predict(base_features)[0]
 
     final_features = np.array([
-        CN, A1, A2, BA,
+        CN, A1, A2, BA_model,
         eq_distances[0], eq_distances[1], eq_distances[2], eq_distances[3],
         B20, Ucal
     ]).reshape(1, -1)
