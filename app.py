@@ -221,6 +221,6 @@ if st.button("Predict"):
         f"log(τ₀): {log_tau:.4f} ± {logtau_err}"
     )
 
-    st.info(
-        f"τ₀ = 10^(log(τ₀)) = {tau0:.2e} s"
-    )
+   # st.info(
+   #    f"τ₀ = 10^(log(τ₀)) = {tau0:.2e} s"
+   # )
