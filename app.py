@@ -154,7 +154,7 @@ if st.button("Predict"):
         A1, A2 = A2, A1
 
     theta = angle(Ax1, Dy, Ax2)
-    BA = 180 - theta   # ✅ THIS IS YOUR REQUIRED CHANGE
+    BA = 180 - theta  # final value only
 
     # =========================
     # EQUATORIAL
@@ -181,7 +181,7 @@ if st.button("Predict"):
         st.markdown("### Axial")
         st.write(f"A1: {A1:.3f} Å")
         st.write(f"A2: {A2:.3f} Å")
-        st.write(f"BA (180 − θ): {BA:.2f}°")
+        st.write(f"BA: {BA:.2f}°")
 
     with col2:
         st.markdown("### Equatorial")
