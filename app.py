@@ -8,7 +8,6 @@ from math import acos, degrees
 # =========================
 CM_TO_K = 1.44
 
-# Uncertainties (given)
 Ucal_err_cm = 45
 Ueff_err_cm = 40
 logtau_err = 0.25
@@ -154,7 +153,8 @@ if st.button("Predict"):
     if A1 > A2:
         A1, A2 = A2, A1
 
-    BA = abs(180 - angle(Ax1, Dy, Ax2))
+    theta = angle(Ax1, Dy, Ax2)
+    BA = 180 - theta   # ✅ THIS IS YOUR REQUIRED CHANGE
 
     # =========================
     # EQUATORIAL
@@ -169,6 +169,24 @@ if st.button("Predict"):
 
     selected = candidates[:CN]
     eq_distances = sorted([x[2] for x in selected])
+
+    # =========================
+    # STRUCTURAL PARAMETERS
+    # =========================
+    st.subheader("Structural Parameters")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("### Axial")
+        st.write(f"A1: {A1:.3f} Å")
+        st.write(f"A2: {A2:.3f} Å")
+        st.write(f"BA (180 − θ): {BA:.2f}°")
+
+    with col2:
+        st.markdown("### Equatorial")
+        for i, val in enumerate(eq_distances):
+            st.write(f"E{i+1}: {val:.3f} Å")
 
     # =========================
     # LOAD MODELS
@@ -198,12 +216,10 @@ if st.button("Predict"):
     Ucal_err_K = Ucal_err_cm * CM_TO_K
     Ueff_err_K = Ueff_err_cm * CM_TO_K
 
-    tau0 = 10**(log_tau)
-
     # =========================
     # OUTPUT
     # =========================
-    st.subheader("Predictions (with Units & Uncertainty)")
+    st.subheader("Predictions")
 
     st.success(
         f"Ucal: {Ucal:.2f} ± {Ucal_err_cm} cm⁻¹  "
@@ -220,7 +236,3 @@ if st.button("Predict"):
     st.success(
         f"log(τ₀): {log_tau:.4f} ± {logtau_err}"
     )
-
-   # st.info(
-   #    f"τ₀ = 10^(log(τ₀)) = {tau0:.2e} s"
-   # )
