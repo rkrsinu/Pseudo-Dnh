@@ -4,6 +4,16 @@ import joblib
 from math import acos, degrees
 
 # =========================
+# CONSTANTS
+# =========================
+CM_TO_K = 1.44
+
+# Uncertainties (given)
+Ucal_err_cm = 45
+Ueff_err_cm = 40
+logtau_err = 0.25
+
+# =========================
 # MODEL PATHS
 # =========================
 MODEL_PATHS = {
@@ -12,7 +22,6 @@ MODEL_PATHS = {
     "D6h": {"Ucal": "D6h_U_GB_model.joblib", "B20": "D6h_B20_GB_model.joblib"},
 }
 
-# SAME NAMES (as you requested)
 UEFF_MODEL = "Ueff_GB_model.joblib"
 TAU_MODEL  = "tio_GB_model.joblib"
 
@@ -162,73 +171,56 @@ if st.button("Predict"):
     eq_distances = sorted([x[2] for x in selected])
 
     # =========================
-    # DISPLAY STRUCTURE
-    # =========================
-    st.subheader("Structural Parameters")
-
-    st.write("A1:", A1)
-    st.write("A2:", A2)
-    st.write("BA:", BA)
-
-    for i, val in enumerate(eq_distances):
-        st.write(f"E{i+1}:", val)
-
-    # =========================
-    # E HANDLING
-    # =========================
-    if symmetry == "D4h":
-        E = eq_distances[:4]
-
-    elif symmetry == "D5h":
-        E = [
-            eq_distances[0],
-            eq_distances[1],
-            eq_distances[2],
-            np.mean(eq_distances[3:5])
-        ]
-
-    elif symmetry == "D6h":
-        E = [
-            eq_distances[0],
-            eq_distances[1],
-            eq_distances[2],
-            np.mean(eq_distances[3:6])
-        ]
-
-    # =========================
     # LOAD MODELS
     # =========================
     u_model, b20_model, ueff_model, tau_model = load_models(symmetry)
 
-    # =========================
-    # BASE FEATURES (symmetry models)
-    # =========================
     base_features = np.array([A1, A2, BA, *eq_distances]).reshape(1, -1)
 
     Ucal = u_model.predict(base_features)[0]
     B20  = b20_model.predict(base_features)[0]
 
-    # =========================
-    # FINAL FEATURES (NO gz)
-    # =========================
     final_features = np.array([
         CN, A1, A2, BA,
-        E[0], E[1], E[2], E[3],
+        eq_distances[0], eq_distances[1], eq_distances[2], eq_distances[3],
         B20, Ucal
     ]).reshape(1, -1)
 
-    # =========================
-    # FINAL PREDICTIONS
-    # =========================
     Ueff = ueff_model.predict(final_features)[0]
     log_tau = tau_model.predict(final_features)[0]
 
     # =========================
+    # CONVERSIONS
+    # =========================
+    Ucal_K = Ucal * CM_TO_K
+    Ueff_K = Ueff * CM_TO_K
+
+    Ucal_err_K = Ucal_err_cm * CM_TO_K
+    Ueff_err_K = Ueff_err_cm * CM_TO_K
+
+    tau0 = 10**(log_tau)
+
+    # =========================
     # OUTPUT
     # =========================
-    st.subheader("Predictions")
+    st.subheader("Predictions (with Units & Uncertainty)")
 
-    st.success(f"Ucal: {Ucal:.2f}")
+    st.success(
+        f"Ucal: {Ucal:.2f} ± {Ucal_err_cm} cm⁻¹  "
+        f"({Ucal_K:.2f} ± {Ucal_err_K:.2f} K)"
+    )
+
     st.success(f"B20: {B20:.4f}")
-    st.success(f"Ueff: {Ueff:.2f}")
-    st.success(f"log(tau0): {log_tau:.4f}")
+
+    st.success(
+        f"Ueff: {Ueff:.2f} ± {Ueff_err_cm} cm⁻¹  "
+        f"({Ueff_K:.2f} ± {Ueff_err_K:.2f} K)"
+    )
+
+    st.success(
+        f"log(τ₀): {log_tau:.4f} ± {logtau_err}"
+    )
+
+    st.info(
+        f"τ₀ = 10^(log(τ₀)) = {tau0:.2e} s"
+    )
