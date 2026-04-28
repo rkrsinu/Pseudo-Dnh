@@ -8,10 +8,6 @@ from math import acos, degrees
 # =========================
 CM_TO_K = 1.44
 
-Ucal_err_cm = 45
-Ueff_err_cm = 40
-logtau_err = 0.25
-
 # =========================
 # MODEL PATHS
 # =========================
@@ -109,6 +105,21 @@ def get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2):
     return sorted(candidates, key=lambda x: x[2])
 
 # =========================
+# UNCERTAINTY FROM ENSEMBLE
+# =========================
+def predict_with_uncertainty(model, X):
+    try:
+        # Works for GradientBoosting
+        all_preds = np.array([
+            tree.predict(X)[0] for tree in model.estimators_.ravel()
+        ])
+        return np.mean(all_preds), np.std(all_preds)
+    except:
+        # fallback
+        pred = model.predict(X)[0]
+        return pred, 0.0
+
+# =========================
 # UI
 # =========================
 st.title("Dy Magnetic Property Predictor")
@@ -155,8 +166,8 @@ if st.button("Predict"):
 
     theta = angle(Ax1, Dy, Ax2)
 
-    BA_model = 180 - theta   # used ONLY for model
-    BA_display = theta       # shown to user
+    BA_model = 180 - theta
+    BA_display = theta
 
     # =========================
     # EQUATORIAL
@@ -172,8 +183,12 @@ if st.button("Predict"):
     selected = candidates[:CN]
     eq_distances = sorted([x[2] for x in selected])
 
+    # pad to max 6 for safety
+    while len(eq_distances) < 6:
+        eq_distances.append(0.0)
+
     # =========================
-    # STRUCTURAL PARAMETERS
+    # DISPLAY STRUCTURE
     # =========================
     st.subheader("Structural Parameters")
 
@@ -183,31 +198,33 @@ if st.button("Predict"):
         st.markdown("### Axial")
         st.write(f"A1: {A1:.3f} Å")
         st.write(f"A2: {A2:.3f} Å")
-        st.write(f"BA: {BA_display:.2f}°")  # only theta shown
+        st.write(f"BA: {BA_display:.2f}°")
 
     with col2:
         st.markdown("### Equatorial")
-        for i, val in enumerate(eq_distances):
-            st.write(f"E{i+1}: {val:.3f} Å")
+        for i in range(CN):
+            st.write(f"E{i+1}: {eq_distances[i]:.3f} Å")
 
     # =========================
     # LOAD MODELS
     # =========================
     u_model, b20_model, ueff_model, tau_model = load_models(symmetry)
 
-    base_features = np.array([A1, A2, BA_model, *eq_distances]).reshape(1, -1)
+    base_features = np.array(
+        [A1, A2, BA_model] + eq_distances[:CN]
+    ).reshape(1, -1)
 
-    Ucal = u_model.predict(base_features)[0]
-    B20  = b20_model.predict(base_features)[0]
+    Ucal, Ucal_err_cm = predict_with_uncertainty(u_model, base_features)
+    B20, _ = predict_with_uncertainty(b20_model, base_features)
 
     final_features = np.array([
         CN, A1, A2, BA_model,
-        eq_distances[0], eq_distances[1], eq_distances[2], eq_distances[3],
+        *eq_distances[:4],   # keep consistent with training
         B20, Ucal
     ]).reshape(1, -1)
 
-    Ueff = ueff_model.predict(final_features)[0]
-    log_tau = tau_model.predict(final_features)[0]
+    Ueff, Ueff_err_cm = predict_with_uncertainty(ueff_model, final_features)
+    log_tau, logtau_err = predict_with_uncertainty(tau_model, final_features)
 
     # =========================
     # CONVERSIONS
@@ -224,17 +241,17 @@ if st.button("Predict"):
     st.subheader("Predictions")
 
     st.success(
-        f"Ucal: {Ucal:.2f} ± {Ucal_err_cm} cm⁻¹  "
+        f"Ucal: {Ucal:.2f} ± {Ucal_err_cm:.2f} cm⁻¹  "
         f"({Ucal_K:.2f} ± {Ucal_err_K:.2f} K)"
     )
 
     st.success(f"B20: {B20:.4f}")
 
     st.success(
-        f"Ueff: {Ueff:.2f} ± {Ueff_err_cm} cm⁻¹  "
+        f"Ueff: {Ueff:.2f} ± {Ueff_err_cm:.2f} cm⁻¹  "
         f"({Ueff_K:.2f} ± {Ueff_err_K:.2f} K)"
     )
 
     st.success(
-        f"log(τ₀): {log_tau:.4f} ± {logtau_err}"
+        f"log(τ₀): {log_tau:.4f} ± {logtau_err:.4f}"
     )
