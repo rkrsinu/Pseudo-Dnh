@@ -105,19 +105,16 @@ def get_equatorial_atoms(atoms, coords, dy_idx, ax1, ax2):
     return sorted(candidates, key=lambda x: x[2])
 
 # =========================
-# UNCERTAINTY FROM ENSEMBLE
+# NEW: UNCERTAINTY FUNCTION
 # =========================
-def predict_with_uncertainty(model, X):
+def get_uncertainty(model, X):
     try:
-        # Works for GradientBoosting
-        all_preds = np.array([
+        preds = np.array([
             tree.predict(X)[0] for tree in model.estimators_.ravel()
         ])
-        return np.mean(all_preds), np.std(all_preds)
+        return np.std(preds)
     except:
-        # fallback
-        pred = model.predict(X)[0]
-        return pred, 0.0
+        return 0.0
 
 # =========================
 # UI
@@ -183,12 +180,8 @@ if st.button("Predict"):
     selected = candidates[:CN]
     eq_distances = sorted([x[2] for x in selected])
 
-    # pad to max 6 for safety
-    while len(eq_distances) < 6:
-        eq_distances.append(0.0)
-
     # =========================
-    # DISPLAY STRUCTURE
+    # STRUCTURAL PARAMETERS
     # =========================
     st.subheader("Structural Parameters")
 
@@ -202,29 +195,34 @@ if st.button("Predict"):
 
     with col2:
         st.markdown("### Equatorial")
-        for i in range(CN):
-            st.write(f"E{i+1}: {eq_distances[i]:.3f} Å")
+        for i, val in enumerate(eq_distances):
+            st.write(f"E{i+1}: {val:.3f} Å")
 
     # =========================
     # LOAD MODELS
     # =========================
     u_model, b20_model, ueff_model, tau_model = load_models(symmetry)
 
-    base_features = np.array(
-        [A1, A2, BA_model] + eq_distances[:CN]
-    ).reshape(1, -1)
+    base_features = np.array([A1, A2, BA_model, *eq_distances]).reshape(1, -1)
 
-    Ucal, Ucal_err_cm = predict_with_uncertainty(u_model, base_features)
-    B20, _ = predict_with_uncertainty(b20_model, base_features)
+    Ucal = u_model.predict(base_features)[0]
+    B20  = b20_model.predict(base_features)[0]
 
     final_features = np.array([
         CN, A1, A2, BA_model,
-        *eq_distances[:4],   # keep consistent with training
+        eq_distances[0], eq_distances[1], eq_distances[2], eq_distances[3],
         B20, Ucal
     ]).reshape(1, -1)
 
-    Ueff, Ueff_err_cm = predict_with_uncertainty(ueff_model, final_features)
-    log_tau, logtau_err = predict_with_uncertainty(tau_model, final_features)
+    Ueff = ueff_model.predict(final_features)[0]
+    log_tau = tau_model.predict(final_features)[0]
+
+    # =========================
+    # NEW: DYNAMIC ERRORS
+    # =========================
+    Ucal_err_cm = get_uncertainty(u_model, base_features)
+    Ueff_err_cm = get_uncertainty(ueff_model, final_features)
+    logtau_err  = get_uncertainty(tau_model, final_features)
 
     # =========================
     # CONVERSIONS
