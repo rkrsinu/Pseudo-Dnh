@@ -14,6 +14,7 @@ CM_TO_K = 1.44
 # MODEL PATHS
 # =========================================================
 MODEL_PATHS = {
+
     "D4h": {
         "Ucal": "D4h_U_GB_model.joblib",
         "B20": "D4h_B20_GB_model.joblib"
@@ -146,26 +147,23 @@ def get_first_coordination_sphere(
 
         atom = atoms[i]
 
-        # skip hydrogen
+        # skip H
         if atom.upper() == "H":
             continue
 
         d = dist(Dy, coord)
 
-        # coordination cutoff
         if 1.7 <= d <= 3.6:
 
             candidates.append(
                 (i, atom, d)
             )
 
-    # sort by distance
     candidates = sorted(
         candidates,
         key=lambda x: x[2]
     )
 
-    # select closest atoms
     selected = candidates[:total_atoms]
 
     return selected
@@ -209,9 +207,11 @@ def find_axial_atoms(
 
     best_plane = None
 
-    best_dev = 999
+    best_score = 999999
 
-    # test all possible equatorial planes
+    # =====================================================
+    # TEST ALL POSSIBLE EQUATORIAL PLANES
+    # =====================================================
     for subset in combinations(indices, eq_num):
 
         pts = np.array([
@@ -219,22 +219,52 @@ def find_axial_atoms(
             for i in subset
         ])
 
+        # planarity
         dev = plane_deviation(pts)
 
-        if dev < best_dev:
+        # remaining atoms = axial
+        axial = [
+            i for i in indices
+            if i not in subset
+        ]
 
-            best_dev = dev
+        ax1, ax2 = axial
+
+        Dy = coords[dy_idx]
+
+        d1 = dist(Dy, coords[ax1])
+        d2 = dist(Dy, coords[ax2])
+
+        avg_axial = (d1 + d2) / 2
+
+        # =================================================
+        # D4h SPECIAL RULE
+        # =================================================
+        if symmetry == "D4h":
+
+            # prioritize shortest axial bonds
+            score = (
+                dev * 100
+                +
+                avg_axial
+            )
+
+        # =================================================
+        # D5h / D6h
+        # =================================================
+        else:
+
+            score = dev
+
+        if score < best_score:
+
+            best_score = score
 
             best_plane = subset
 
-    # remaining atoms = axial
-    axial = [
-        i for i in indices
-        if i not in best_plane
-    ]
+            best_axial = axial
 
-    ax1 = axial[0]
-    ax2 = axial[1]
+    ax1, ax2 = best_axial
 
     return ax1, ax2, best_plane
 
@@ -323,12 +353,14 @@ if st.button("Predict"):
         st.stop()
 
     # =====================================================
-    # TOTAL COORDINATION NUMBER
+    # TOTAL COORDINATION
     # =====================================================
     TOTAL_COORD = {
+
         "D4h": 6,
         "D5h": 7,
         "D6h": 8
+
     }[symmetry]
 
     # =====================================================
@@ -344,13 +376,14 @@ if st.button("Predict"):
     if len(sphere) < TOTAL_COORD:
 
         st.error(
-            f"Only {len(sphere)} coordinating atoms found"
+            f"Only {len(sphere)} "
+            f"coordinating atoms found"
         )
 
         st.stop()
 
     # =====================================================
-    # FIND AXIAL + EQUATORIAL
+    # FIND AXIAL
     # =====================================================
     ax1, ax2, eq_plane = find_axial_atoms(
         symmetry,
@@ -360,6 +393,9 @@ if st.button("Predict"):
         sphere
     )
 
+    # =====================================================
+    # EQUATORIAL
+    # =====================================================
     eq_atoms = get_equatorial_atoms(
         sphere,
         eq_plane
@@ -386,6 +422,7 @@ if st.button("Predict"):
     )
 
     BA_model = 180 - theta
+
     BA_display = theta
 
     # =====================================================
@@ -397,9 +434,11 @@ if st.button("Predict"):
     ])
 
     CN = {
+
         "D4h": 4,
         "D5h": 5,
         "D6h": 6
+
     }[symmetry]
 
     if len(eq_distances) != CN:
@@ -412,15 +451,15 @@ if st.button("Predict"):
         st.stop()
 
     # =====================================================
-    # DISPLAY DETECTED GEOMETRY
+    # DISPLAY
     # =====================================================
     st.subheader(
         "Detected Coordination Sphere"
     )
 
-    # -------------------------
+    # =====================================================
     # AXIAL
-    # -------------------------
+    # =====================================================
     st.write("### Axial Atoms")
 
     st.write(
@@ -435,9 +474,9 @@ if st.button("Predict"):
         f"({atoms[ax2]})"
     )
 
-    # -------------------------
+    # =====================================================
     # EQUATORIAL
-    # -------------------------
+    # =====================================================
     st.write("### Equatorial Atoms")
 
     for item in eq_atoms:
@@ -459,9 +498,9 @@ if st.button("Predict"):
 
     col1, col2 = st.columns(2)
 
-    # -------------------------
+    # =====================================================
     # AXIAL
-    # -------------------------
+    # =====================================================
     with col1:
 
         st.markdown("### Axial")
@@ -474,9 +513,9 @@ if st.button("Predict"):
             f"BA: {BA_display:.2f}°"
         )
 
-    # -------------------------
+    # =====================================================
     # EQUATORIAL
-    # -------------------------
+    # =====================================================
     with col2:
 
         st.markdown("### Equatorial")
@@ -498,10 +537,14 @@ if st.button("Predict"):
     # FEATURES
     # =====================================================
     base_features = np.array([
+
         A1,
         A2,
+
         BA_model,
+
         *eq_distances
+
     ]).reshape(1, -1)
 
     # =====================================================
@@ -543,7 +586,7 @@ if st.button("Predict"):
     )[0]
 
     # =====================================================
-    # UNCERTAINTIES
+    # UNCERTAINTY
     # =====================================================
     Ucal_err_cm = get_uncertainty(
         u_model,
@@ -561,12 +604,14 @@ if st.button("Predict"):
     )
 
     # =====================================================
-    # UNIT CONVERSION
+    # CONVERSION
     # =====================================================
     Ucal_K = Ucal * CM_TO_K
+
     Ueff_K = Ueff * CM_TO_K
 
     Ucal_err_K = Ucal_err_cm * CM_TO_K
+
     Ueff_err_K = Ueff_err_cm * CM_TO_K
 
     # =====================================================
