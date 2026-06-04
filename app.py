@@ -587,9 +587,9 @@ if st.button("Predict"):
         f"({Ucal_K:.2f} ± {Ucal_err_K:.2f} K)"
     )
 
-    st.success(
-        f"B20: {B20:.4f}"
-    )
+    #st.success(
+     #   f"B20: {B20:.4f}"
+    #)
 
     st.success(
         f"Ueff: "
