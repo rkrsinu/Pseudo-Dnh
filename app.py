@@ -632,14 +632,10 @@ if st.button("Predict"):
         f"Tor (τref = 100 s): "
         f"{Tor:.2f} ± {Tor_err:.2f} K"
     )
-    st.markdown(r"""
-    <div style="text-align:left;">
-    \[
+    st.latex(r"""
     T_{\mathrm{Or}}
     =
     -\frac{U_{\mathrm{eff}}}
     {\ln\left(\frac{\tau_{0}}
     {\tau_{\mathrm{ref}}}\right)}
-    \]
-    </div>
-    """, unsafe_allow_html=True)
+    """)
