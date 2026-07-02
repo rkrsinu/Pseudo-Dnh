@@ -575,7 +575,31 @@ if st.button("Predict"):
     Ucal_err_K = Ucal_err_cm * CM_TO_K
 
     Ueff_err_K = Ueff_err_cm * CM_TO_K
+# =====================================================
+# ORBACH TEMPERATURE (Tor)
+# =====================================================
+TAU_REF = 100.0  # seconds
 
+# tau0 from predicted log10(tau0)
+tau0 = 10 ** log_tau
+
+# Tor (Kelvin)
+Tor = -Ueff_K / np.log(tau0 / TAU_REF)
+
+# Uncertainty (error propagation)
+ln_term = np.log(tau0 / TAU_REF)
+
+dT_dU = -1.0 / ln_term
+
+dT_dlogtau = (
+    Ueff_K * np.log(10)
+    / (ln_term ** 2)
+)
+
+Tor_err = np.sqrt(
+    (dT_dU * Ueff_err_K) ** 2 +
+    (dT_dlogtau * logtau_err) ** 2
+)
     # =====================================================
     # OUTPUT
     # =====================================================
@@ -601,3 +625,7 @@ if st.button("Predict"):
         f"log(τ₀): "
         f"{log_tau:.4f} ± {logtau_err:.4f}"
     )
+st.success(
+    f"Tor (τref = 100 s): "
+    f"{Tor:.2f} ± {Tor_err:.2f} K"
+)
