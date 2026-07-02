@@ -580,19 +580,22 @@ if st.button("Predict"):
     # =====================================================
     TAU_REF = 100.0  # seconds
 
-    # tau0 from predicted log10(tau0)
+    # Convert predicted log10(tau0) to tau0 (s)
     tau0 = 10 ** log_tau
 
-    # Tor (Kelvin)
-    Tor = -Ueff_K / np.log(tau0 / TAU_REF)
-
-    # Uncertainty (error propagation)
+    # Natural logarithm term
     ln_term = np.log(tau0 / TAU_REF)
 
+    # Tor using Ueff in Kelvin
+    Tor = -Ueff_K / ln_term
+
+    # =====================================================
+    # Uncertainty (using Ueff in Kelvin)
+    # =====================================================
     dT_dU = -1.0 / ln_term
 
     dT_dlogtau = (
-         Ueff_K * np.log(10)
+        Ueff_K * np.log(10)
         / (ln_term ** 2)
     )
 
