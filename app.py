@@ -633,5 +633,10 @@ if st.button("Predict"):
         f"{Tor:.2f} ± {Tor_err:.2f} K"
     )
     st.markdown(
-    r"$T_{\mathrm{Or}}=-\frac{U_{\mathrm{eff}}}{\ln\left(\frac{\tau_0}{\tau_{\mathrm{ref}}}\right)}$"
+        r"""
+    <span style="font-size:26px;">
+    $T_{\mathrm{Or}}=-\dfrac{U_{\mathrm{eff}}}{\ln\left(\dfrac{\tau_{0}}{\tau_{\mathrm{ref}}}\right)}$
+    </span>
+    """,
+        unsafe_allow_html=True,
     )
