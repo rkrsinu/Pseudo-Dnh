@@ -634,13 +634,8 @@ if st.button("Predict"):
     )
     st.markdown(
         r"""
-    <div style="text-align: left; font-size: 22px;">
-    $$
-    T_{\mathrm{Or}}
-    =
-    -\frac{U_{\mathrm{eff}}}
-    {\ln\left(\frac{\tau_{0}}{\tau_{\mathrm{ref}}}\right)}
-    $$
+    <div style="text-align:left; font-size:22px;">
+    $T_{\mathrm{Or}}=-\dfrac{U_{\mathrm{eff}}}{\ln\left(\dfrac{\tau_{0}}{\tau_{\mathrm{ref}}}\right)}$
     </div>
     """,
         unsafe_allow_html=True,
