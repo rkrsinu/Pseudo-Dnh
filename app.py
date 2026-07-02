@@ -634,16 +634,25 @@ if st.button("Predict"):
     )
     st.markdown(
         """
-    <p style="font-size:24px; text-align:left;">
-    <i>T</i><sub>Or</sub> =
-    − <span style="display:inline-block;vertical-align:middle;">
-        <span style="border-bottom:1px solid black;display:block;text-align:center;">
-            U<sub>eff</sub>
+    <p style="font-size:24px; text-align:left; color:white;">
+        <i>T</i><sub>Or</sub> =
+        −
+        <span style="display:inline-block; vertical-align:middle; margin-left:6px;">
+            <span style="
+                border-bottom:2px solid white;
+                display:block;
+                text-align:center;
+                padding:0 6px;
+                color:white;">
+                U<sub>eff</sub>
+            </span>
+            <span style="
+                display:block;
+                text-align:center;
+                color:white;">
+                ln(τ<sub>0</sub>/τ<sub>ref</sub>)
+            </span>
         </span>
-        <span style="display:block;text-align:center;">
-            ln(τ<sub>0</sub>/τ<sub>ref</sub>)
-        </span>
-    </span>
     </p>
     """,
         unsafe_allow_html=True,
